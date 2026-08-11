@@ -6,6 +6,7 @@ albums.txt
 photos.json
 state.json
 *.log
+.frame.lock
 
 # Python
 __pycache__/

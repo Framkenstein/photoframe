@@ -29,6 +29,20 @@
   }
   .layer.visible { opacity: 1; }
 
+  /* Invisible hotspot for opening settings without a keyboard. Deliberately
+     unmarked so it does not intrude on the photo. */
+  #settingsCorner {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 12vmin;
+    height: 12vmin;
+    max-width: 110px;
+    max-height: 110px;
+    z-index: 10;
+    cursor: none;
+  }
+
   #message {
     position: fixed;
     inset: 0;
@@ -60,6 +74,8 @@
 
 <img class="layer" id="layerA" alt="">
 <img class="layer" id="layerB" alt="">
+
+<div id="settingsCorner" title="Settings" aria-label="Settings"></div>
 
 <div id="message">
   <div id="messageText">Loading…</div>
@@ -168,10 +184,25 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     next();
   }
+  // In kiosk mode there is no address bar, so give the settings screen a key.
+  // Deliberately not Escape -- people expect that to close the frame, and
+  // Chromium's kiosk mode ignores it, so binding it here would just confuse.
+  if (event.code === "KeyS") {
+    event.preventDefault();
+    location.href = "/setup";
+  }
 });
 
-// Tap or click also advances, for the touchscreen.
+// Tap or click advances, for the touchscreen.
 document.addEventListener("click", next);
+
+// ...except the top-right corner, which opens settings. Same idea as the key,
+// but reachable on a touchscreen with no keyboard attached.
+const corner = document.getElementById("settingsCorner");
+corner.addEventListener("click", (event) => {
+  event.stopPropagation();
+  location.href = "/setup";
+});
 
 refresh();
 setInterval(refresh, POLL_MS);   // catches the once-a-day change

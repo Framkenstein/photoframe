@@ -3,14 +3,18 @@
 #
 # Keeps the screen awake only while the frame is running, and puts the normal
 # blanking behaviour back on exit.
+#
+# Exit the frame with Alt+F4.
 
 set -u
 
 FRAME_URL="http://localhost:8081"
 WAYFIRE_INI="$HOME/.config/wayfire.ini"
 MARKER="# --- photoframe keep-awake (auto-added, removed on exit) ---"
+BLOCK_LINES=4          # lines we append after the marker line itself
 PROFILE="$HOME/.config/photoframe-kiosk"
 BASE="$(cd "$(dirname "$0")" && pwd)"
+LOCKFILE="$BASE/.frame.lock"
 
 # Launched from a Desktop button there is no terminal to print to.
 if [ ! -t 1 ]; then
@@ -19,12 +23,28 @@ fi
 
 log() { echo "[$(date '+%F %T')] $*"; }
 
+# --- Only ever run one frame at a time -------------------------------------
+# Clicking the Desktop button twice used to start a second copy. Chromium would
+# hand the URL to the instance already holding the profile and exit straight
+# away -- and that exit tore down the screen-awake setting out from under the
+# frame that was still running. Take the lock before touching anything.
+exec 9>"$LOCKFILE"
+if ! flock -n 9; then
+  log "frame is already running -- ignoring this launch"
+  exit 0
+fi
+
 restore_blanking() {
   if [ -f "$WAYFIRE_INI" ] && grep -qF "$MARKER" "$WAYFIRE_INI"; then
-    sed -i "/$(printf '%s' "$MARKER" | sed 's/[][\.*^$/]/\\&/g')/,\$d" "$WAYFIRE_INI"
+    # Delete exactly our own block -- the marker line plus the settings under
+    # it. Deleting through to end-of-file would destroy anything the Pi's
+    # display-settings GUI appended after us while the frame was running.
+    escaped=$(printf '%s' "$MARKER" | sed 's/[][\.*^$/]/\\&/g')
+    sed -i "/$escaped/,+${BLOCK_LINES}d" "$WAYFIRE_INI"
     log "screen blanking restored"
   fi
 }
+# Only armed once we hold the lock, so a duplicate launch can never trigger it.
 trap restore_blanking EXIT INT TERM
 
 # 1. Make sure the frame service is up.
@@ -48,9 +68,12 @@ done
 log "service is up"
 
 # 2. Stop the screen blanking. Wayfire reloads this file live.
+#    (restore first, in case a previous run was killed before it could clean up)
 restore_blanking
 {
-  echo ""
+  # No leading blank line: the block must be exactly BLOCK_LINES+1 lines so the
+  # cleanup restores the file byte for byte. Otherwise every launch would leave
+  # one more blank line behind.
   echo "$MARKER"
   echo "[idle]"
   echo "dpms_timeout = -1"
@@ -60,6 +83,9 @@ restore_blanking
 log "screen blanking disabled"
 
 # 3. Fullscreen browser, in its own profile so normal browsing is untouched.
+#    Chromium on the Pi is noisy about missing UPower/video devices; none of it
+#    matters here, so keep it out of the log.
+log "opening frame (Alt+F4 to exit)"
 chromium-browser \
   --kiosk \
   --user-data-dir="$PROFILE" \
@@ -71,6 +97,7 @@ chromium-browser \
   --overscroll-history-navigation=0 \
   --check-for-update-interval=31536000 \
   --start-fullscreen \
-  "$FRAME_URL"
+  "$FRAME_URL/frame" 2>&1 | grep -viE "UPower|v4l2_utils|gpu_init|close object|extension_registrar|object_proxy"
 
+log "frame closed"
 # trap restores blanking on the way out

@@ -98,7 +98,15 @@ Click the **Photo Frame** button on your Desktop, or open
 | --- | --- |
 | <kbd>Space</kbd> / <kbd>→</kbd> / <kbd>Enter</kbd> | Next photo |
 | Click or tap | Next photo |
+| <kbd>S</kbd> | Change your albums |
+| Tap the top-right corner | Change your albums (no keyboard needed) |
 | <kbd>Alt</kbd>+<kbd>F4</kbd> | Exit the frame |
+
+<kbd>Esc</kbd> does **not** exit — Chromium's kiosk mode ignores it. Use
+<kbd>Alt</kbd>+<kbd>F4</kbd>.
+
+The frame remembers which photo it was on, so a reboot or a power cut brings
+back the same one rather than jumping somewhere random.
 
 Advancing manually does not disturb the schedule: the photo you land on stays
 until the next midnight.

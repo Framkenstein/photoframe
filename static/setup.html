@@ -30,6 +30,15 @@
 
   main { max-width: 40rem; margin: 0 auto; }
 
+  #back {
+    display: inline-block;
+    margin-bottom: 1.2rem;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: .95rem;
+  }
+  #back:hover { color: var(--text); }
+
   h1 { margin: 0 0 .4rem; font-size: 1.7rem; letter-spacing: -.02em; }
   .sub { margin: 0 0 2rem; color: var(--muted); }
 
@@ -155,6 +164,8 @@
 </head>
 <body>
 <main>
+
+  <a href="/frame" id="back" hidden>← Back to the frame</a>
 
   <h1>Set up your photo frame</h1>
   <p class="sub">Paste a link to each Google Photos album you want on the frame.</p>
@@ -338,8 +349,13 @@ fetch("/api/albums")
   .then(r => r.json())
   .then(d => {
     const existing = (d.albums || []).filter(Boolean);
-    if (existing.length) existing.forEach(u => addRow(u));
-    else addRow();
+    if (existing.length) {
+      existing.forEach(u => addRow(u));
+      // Only offer "back" when there is actually a frame to go back to.
+      document.getElementById("back").hidden = false;
+    } else {
+      addRow();
+    }
   })
   .catch(() => addRow());
 </script>
