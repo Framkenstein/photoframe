@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo Frame — Setup</title>
+<style>
+  :root {
+    --bg: #101114;
+    --card: #191b20;
+    --line: #2c2f36;
+    --text: #eceef2;
+    --muted: #9aa0ab;
+    --accent: #4c8dff;
+    --accent-text: #fff;
+    --bad: #ff6b6b;
+    --good: #58cc8f;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    padding: 2.5rem 1.25rem 4rem;
+    background: var(--bg);
+    color: var(--text);
+    font: 400 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  main { max-width: 40rem; margin: 0 auto; }
+
+  h1 { margin: 0 0 .4rem; font-size: 1.7rem; letter-spacing: -.02em; }
+  .sub { margin: 0 0 2rem; color: var(--muted); }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.5rem;
+  }
+
+  details {
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: .85rem 1rem;
+    background: #15171b;
+  }
+  summary { cursor: pointer; color: var(--muted); font-size: .95rem; }
+  details ol { margin: .8rem 0 .2rem; padding-left: 1.3rem; color: var(--muted); font-size: .95rem; }
+  details li { margin-bottom: .3rem; }
+
+  label.row-label {
+    display: block;
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+    margin-bottom: .4rem;
+  }
+
+  .row { display: flex; gap: .5rem; margin-bottom: .85rem; align-items: flex-start; }
+
+  textarea {
+    flex: 1;
+    min-height: 2.9rem;
+    resize: vertical;
+    padding: .7rem .85rem;
+    border-radius: 9px;
+    border: 1px solid var(--line);
+    background: #0d0e11;
+    color: var(--text);
+    font: 400 .95rem/1.4 ui-monospace, "DejaVu Sans Mono", monospace;
+    word-break: break-all;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  textarea.invalid { border-color: var(--bad); }
+
+  button {
+    font: inherit;
+    border-radius: 9px;
+    border: 1px solid var(--line);
+    background: #23262d;
+    color: var(--text);
+    padding: .7rem 1rem;
+    cursor: pointer;
+    transition: background .12s, opacity .12s;
+  }
+  button:hover:not(:disabled) { background: #2c3038; }
+  button:disabled { opacity: .5; cursor: default; }
+
+  .remove {
+    padding: .7rem .85rem;
+    color: var(--muted);
+    line-height: 1;
+  }
+  .remove:hover:not(:disabled) { color: var(--bad); }
+
+  .actions { display: flex; gap: .7rem; margin-top: 1.25rem; flex-wrap: wrap; }
+
+  .primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-text);
+    font-weight: 600;
+    padding: .7rem 1.9rem;
+  }
+  .primary:hover:not(:disabled) { background: #3d7cf0; }
+
+  #status { margin-top: 1.5rem; }
+
+  .note {
+    padding: .9rem 1rem;
+    border-radius: 10px;
+    font-size: .95rem;
+    border: 1px solid var(--line);
+    background: #15171b;
+  }
+  .note.error { border-color: #5a2b2b; background: #1e1414; color: #ffc9c9; }
+
+  .result { list-style: none; margin: .9rem 0 0; padding: 0; }
+  .result li {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .6rem 0;
+    border-top: 1px solid var(--line);
+    font-size: .95rem;
+  }
+  .result .count { color: var(--good); white-space: nowrap; }
+  .result .count.zero { color: var(--bad); }
+  .result .name { color: var(--muted); word-break: break-all; }
+
+  .warn {
+    margin-top: 2rem;
+    font-size: .875rem;
+    color: var(--muted);
+    border-left: 2px solid var(--line);
+    padding-left: .9rem;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: .95em; height: .95em;
+    margin-right: .5em;
+    border: 2px solid var(--muted);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: -.15em;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<main>
+
+  <h1>Set up your photo frame</h1>
+  <p class="sub">Paste a link to each Google Photos album you want on the frame.</p>
+
+  <details>
+    <summary>How do I get a link?</summary>
+    <ol>
+      <li>Open the album in Google Photos</li>
+      <li>Press <strong>Share</strong>, then <strong>Create link</strong></li>
+      <li>Copy the link and paste it below</li>
+    </ol>
+  </details>
+
+  <div class="card">
+    <label class="row-label" for="album0">Photo album links</label>
+    <div id="rows"></div>
+
+    <div class="actions">
+      <button type="button" id="addMore">+ Add more</button>
+      <button type="button" class="primary" id="go">Go</button>
+    </div>
+  </div>
+
+  <div id="status"></div>
+
+  <p class="warn">
+    Anyone with one of these links can view that album without signing in, so
+    keep them to yourself. They are stored only on this device.
+  </p>
+
+</main>
+
+<script>
+const rowsEl   = document.getElementById("rows");
+const addBtn   = document.getElementById("addMore");
+const goBtn    = document.getElementById("go");
+const statusEl = document.getElementById("status");
+
+let counter = 0;
+
+function addRow(value = "", focus = false) {
+  const id = "album" + counter++;
+
+  const row = document.createElement("div");
+  row.className = "row";
+
+  const input = document.createElement("textarea");
+  input.id = id;
+  input.rows = 1;
+  input.spellcheck = false;
+  input.placeholder = "Enter photo link here";
+  input.value = value;
+  // Enter submits rather than adding a newline -- these are single-line links.
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); submit(); }
+  });
+  input.addEventListener("input", () => input.classList.remove("invalid"));
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "remove";
+  remove.title = "Remove this album";
+  remove.setAttribute("aria-label", "Remove this album");
+  remove.textContent = "✕";
+  remove.addEventListener("click", () => { row.remove(); syncRemoveButtons(); });
+
+  row.append(input, remove);
+  rowsEl.append(row);
+  syncRemoveButtons();
+
+  if (focus) input.focus();
+}
+
+// Never let someone delete the only box.
+function syncRemoveButtons() {
+  const rows = rowsEl.querySelectorAll(".row");
+  rows.forEach(r => r.querySelector(".remove").disabled = rows.length === 1);
+}
+
+function values() {
+  return [...rowsEl.querySelectorAll("textarea")].map(t => t.value.trim());
+}
+
+function setBusy(busy, label) {
+  goBtn.disabled = busy;
+  addBtn.disabled = busy;
+  goBtn.textContent = busy ? (label || "Working…") : "Go";
+}
+
+function showError(html) {
+  statusEl.innerHTML = `<div class="note error">${html}</div>`;
+}
+
+function submit() {
+  const albums = values().filter(Boolean);
+
+  if (!albums.length) {
+    showError("Add at least one album link first.");
+    return;
+  }
+
+  statusEl.innerHTML =
+    `<div class="note"><span class="spinner"></span>Checking your albums…</div>`;
+  setBusy(true, "Checking…");
+
+  fetch("/api/albums", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ albums }),
+  })
+    .then(async (r) => ({ ok: r.ok, data: await r.json() }))
+    .then(({ ok, data }) => {
+      setBusy(false);
+
+      if (!ok) {
+        const bad = (data.invalid || []);
+        // Highlight the offending boxes so it is obvious which to fix.
+        [...rowsEl.querySelectorAll("textarea")].forEach(t => {
+          if (bad.includes(t.value.trim())) t.classList.add("invalid");
+        });
+        showError(
+          (data.error || "Something went wrong.") +
+          (bad.length ? "<br><br>Links should start with <code>https://photos.app.goo.gl/</code> or <code>https://photos.google.com/share/</code>" : "")
+        );
+        return;
+      }
+
+      renderResults(data);
+    })
+    .catch(() => {
+      setBusy(false);
+      showError("Could not reach the frame service. Is it still running?");
+    });
+}
+
+function renderResults(data) {
+  const items = (data.albums || []).map((a) => {
+    const zero = a.count === 0;
+    const name = a.title || a.url;
+    const count = zero ? "no photos found" : `${a.count} photos`;
+    return `<li><span class="name">${escapeHtml(name)}</span>
+            <span class="count${zero ? " zero" : ""}">${count}</span></li>`;
+  }).join("");
+
+  const failed = (data.albums || []).filter(a => a.count === 0).length;
+  const total  = data.photo_count;
+
+  let html = `<div class="note">`;
+  html += total
+    ? `<strong>Found ${total} photo${total === 1 ? "" : "s"}.</strong>`
+    : `<strong>No photos found.</strong>`;
+  html += `<ul class="result">${items}</ul>`;
+
+  if (failed) {
+    html += `<p style="color:var(--muted);margin:.9rem 0 0;font-size:.9rem">
+      An album showing no photos is usually not link-shared yet. In Google Photos
+      open it, press <strong>Share</strong>, then <strong>Create link</strong>.</p>`;
+  }
+  html += `</div>`;
+
+  if (total) {
+    html += `<div class="actions">
+      <button type="button" class="primary" onclick="location.href='/frame'">
+        Start the frame →</button></div>`;
+  }
+
+  statusEl.innerHTML = html;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+addBtn.addEventListener("click", () => addRow("", true));
+goBtn.addEventListener("click", submit);
+
+// Prefill with whatever is already configured.
+fetch("/api/albums")
+  .then(r => r.json())
+  .then(d => {
+    const existing = (d.albums || []).filter(Boolean);
+    if (existing.length) existing.forEach(u => addRow(u));
+    else addRow();
+  })
+  .catch(() => addRow());
+</script>
+
+</body>
+</html>

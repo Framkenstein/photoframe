@@ -12,7 +12,7 @@ import time
 from datetime import date
 from pathlib import Path
 
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory
 
 import scrape
 
@@ -85,7 +85,60 @@ def _pick(advance):
 
 @app.route("/")
 def index():
+    # First run with nothing configured yet -> send people to setup instead of
+    # a black screen.
+    if not scrape.read_album_urls():
+        return send_from_directory(BASE / "static", "setup.html")
     return send_from_directory(BASE / "static", "index.html")
+
+
+@app.route("/frame")
+def frame():
+    return send_from_directory(BASE / "static", "index.html")
+
+
+@app.route("/setup")
+def setup():
+    return send_from_directory(BASE / "static", "setup.html")
+
+
+@app.route("/api/albums", methods=["GET"])
+def api_albums_get():
+    return jsonify({"albums": scrape.read_album_urls()})
+
+
+@app.route("/api/albums", methods=["POST"])
+def api_albums_post():
+    """Save the links from the setup screen, then fetch them straight away."""
+    payload = request.get_json(silent=True) or {}
+    submitted = payload.get("albums", [])
+    if not isinstance(submitted, list):
+        return jsonify({"error": "albums must be a list"}), 400
+
+    bad = [u for u in submitted if u.strip() and not scrape.looks_like_album_url(u)]
+    if bad:
+        return (
+            jsonify(
+                {
+                    "error": "Those do not look like Google Photos album links.",
+                    "invalid": bad,
+                }
+            ),
+            400,
+        )
+
+    with _lock:
+        saved = scrape.write_album_urls(submitted)
+        if not saved:
+            return jsonify({"error": "Add at least one album link."}), 400
+        data = scrape.refresh()
+        # A brand new album list means the remembered photo is meaningless.
+        if STATE_FILE.exists():
+            STATE_FILE.unlink()
+
+    return jsonify(
+        {"photo_count": len(data["photos"]), "albums": data.get("albums", [])}
+    )
 
 
 @app.route("/api/photo")

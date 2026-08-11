@@ -50,6 +50,32 @@ def read_album_urls():
     return urls
 
 
+ALBUMS_HEADER = """\
+# Google Photos shared album links, one per line.
+# Managed by the setup screen at http://localhost:8081/setup
+# You can also edit this file by hand.
+"""
+
+
+def write_album_urls(urls):
+    """Replace albums.txt with this list of links."""
+    cleaned = []
+    for url in urls:
+        url = url.strip()
+        if url and not url.startswith("#") and url not in cleaned:
+            cleaned.append(url)
+    ALBUMS_FILE.write_text(ALBUMS_HEADER + "\n".join(cleaned) + "\n")
+    return cleaned
+
+
+def looks_like_album_url(url):
+    """Cheap sanity check so obvious typos get caught before we fetch."""
+    url = url.strip().lower()
+    return url.startswith("http") and (
+        "photos.app.goo.gl" in url or "photos.google.com" in url
+    )
+
+
 def scrape_album(url):
     """Return (title, [photo dicts]) for one shared album URL."""
     resp = requests.get(url, headers={"User-Agent": UA}, timeout=30)

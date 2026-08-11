@@ -7,6 +7,7 @@ Nothing is downloaded or stored. The frame keeps a list of image URLs and
 streams each photo from Google when it displays it, so a Pi with a small SD
 card can show a library of any size.
 
+- **Set up in the browser** — paste your album links, press Go, done
 - **One photo per day**, changing at local midnight
 - **Space bar** (or click/tap) jumps to the next photo immediately
 - **Fills the screen edge to edge** — portrait photos are cropped to fill
@@ -53,28 +54,35 @@ cd ~/photoframe
 service so the frame runs 24/7 and comes back after a reboot, and adds a
 "Photo Frame" button to your Desktop.
 
-## Getting your album links
+## Adding your albums
 
-For each album you want on the frame:
+Open <http://localhost:8081>. With nothing configured yet you get the setup
+screen: paste a link, press **+ Add more** for another box, and press **Go**.
+It fetches each album and tells you how many photos it found before you start
+the frame.
 
-1. Open the album in Google Photos
+To change your albums later, go to <http://localhost:8081/setup> — your current
+links are already filled in.
+
+For each album you want, the link comes from Google Photos:
+
+1. Open the album
 2. **Share** → **Create link**
 3. Copy the link
 
-Then put them in `albums.txt`, one per line:
+Both link formats work:
 
 ```
 https://photos.app.goo.gl/aBcDeFgHiJkLmNoP
 https://photos.google.com/share/AF1QipMxxxx?key=yyyy
 ```
 
-Both link formats work. Lines starting with `#` are ignored.
+<details>
+<summary>Prefer a text file?</summary>
 
-Pick up the changes with:
-
-```bash
-./refresh.sh
-```
+Links are stored in `albums.txt`, one per line; lines starting with `#` are
+ignored. After editing it by hand, run `./refresh.sh` to pick up the changes.
+</details>
 
 > [!WARNING]
 > **A shared album link is a password.** Anyone who has it can view every photo
@@ -98,10 +106,10 @@ until the next midnight.
 ## How it works
 
 ```
-albums.txt ──> scrape.py ──> photos.json ──> server.py ──> browser (kiosk)
-              (reads the                     (picks one     (fills screen,
-               public share                   per day)       Space = next)
-               pages)
+setup screen ──> albums.txt ──> scrape.py ──> photos.json ──> server.py ──> browser
+(paste links,                  (reads the                    (picks one     (kiosk;
+ press Go)                      public share                  per day)       Space
+                                pages)                                       = next)
 ```
 
 - **`scrape.py`** fetches each shared-album page and pulls out image URLs with
@@ -135,15 +143,20 @@ reason.
 
 | Endpoint | Purpose |
 | --- | --- |
+| `GET /` | Setup screen if no albums yet, otherwise the frame |
+| `GET /frame` | The frame, always |
+| `GET /setup` | The setup screen, always |
 | `GET /api/photo` | Today's photo (advances if the day rolled over) |
 | `POST /api/next` | Advance now |
+| `GET /api/albums` | Current album links |
+| `POST /api/albums` | Replace album links, then re-scrape |
 | `GET /api/status` | Photo count, per-album results, current state |
 | `POST /api/refresh` | Force a re-scrape |
 
 ## Troubleshooting
 
 **"No photos yet" on screen**
-`albums.txt` is empty or has only comments. Add a link and run `./refresh.sh`.
+No albums are configured. Open <http://localhost:8081/setup> and add one.
 
 **An album reports 0 photos**
 Almost always the album is not link-shared. Open it in Google Photos → Share →
