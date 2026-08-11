@@ -219,8 +219,23 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-// Tap or click advances, for the touchscreen.
-document.addEventListener("click", next);
+// Chromium's --kiosk is not honoured on some Wayland compositors, and small
+// keyboards have no F11. The Fullscreen API needs a user gesture, so the first
+// tap or click goes fullscreen and later ones advance the photo.
+function goFullscreen() {
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!document.fullscreenElement && req) {
+    try { req.call(el); return true; } catch (e) { /* fall through to advance */ }
+  }
+  return false;
+}
+
+// Tap or click: fullscreen first, then advance.
+document.addEventListener("click", () => {
+  if (goFullscreen()) return;
+  next();
+});
 
 // ...except the top-right corner, which opens settings. Same idea as the key,
 // but reachable on a touchscreen with no keyboard attached.
