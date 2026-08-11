@@ -87,6 +87,19 @@ def _pick(advance):
     return photo
 
 
+@app.after_request
+def no_cache(response):
+    """Never let the browser cache the frame itself.
+
+    A kiosk that caches its own HTML keeps running whatever code it saw first,
+    so a fix on disk never reaches the screen until the profile is wiped.
+    """
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 @app.route("/")
 def index():
     # First run with nothing configured yet -> send people to setup instead of

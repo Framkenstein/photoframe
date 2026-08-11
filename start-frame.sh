@@ -173,6 +173,15 @@ KIOSK_PID=$!
 # Escape in the browser posts to /api/quit, which stops this PID.
 echo "$KIOSK_PID" > "$KIOSK_PID_FILE"
 
+# Chromium's --kiosk and --start-fullscreen are not honoured on this Wayfire
+# setup -- the window opens at an ordinary size. F11 does work, so press it once
+# the window has had time to map. This only lands if the frame has keyboard
+# focus, which is true when it starts with the session (see [autostart] in
+# wayfire.ini) but not when it is launched into a busy desktop.
+if command -v wtype >/dev/null 2>&1; then
+  ( sleep 8; wtype -k F11 2>/dev/null && log "sent F11 to fullscreen the frame" ) &
+fi
+
 wait "$KIOSK_PID"
 log "frame closed"
 # trap restores blanking on the way out
