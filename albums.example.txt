@@ -1,0 +1,15 @@
+# Copy this file to albums.txt and put one shared album link per line.
+#
+#   cp albums.example.txt albums.txt
+#
+# To get a link: open an album in Google Photos -> Share -> "Create link".
+# The album must be link-shared, or the frame cannot read it.
+#
+# Both link styles work:
+#   https://photos.app.goo.gl/XXXXXXXXXXXX
+#   https://photos.google.com/share/AF1QipXXXX...?key=XXXX
+#
+# Lines starting with # are ignored. Add as many albums as you like -- photos
+# from all of them are pooled together and shuffled into one stable sequence.
+#
+# After editing, run:  ./refresh.sh

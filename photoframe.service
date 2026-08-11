@@ -1,0 +1,17 @@
+[Unit]
+Description=Photo Frame server (Google Photos shared albums)
+Documentation=https://github.com/Framkenstein/photoframe
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/photoframe
+ExecStart=/usr/bin/python3 %h/photoframe/server.py
+Restart=always
+RestartSec=10
+StandardOutput=append:%h/photoframe/server.log
+StandardError=append:%h/photoframe/server.log
+
+[Install]
+WantedBy=default.target

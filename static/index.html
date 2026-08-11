@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Photo Frame</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    cursor: none;               /* no mouse pointer on the frame */
+  }
+
+  /* Two stacked layers so one can fade into the other. */
+  .layer {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;          /* fill the screen edge to edge, crop the rest */
+    object-position: center;
+    opacity: 0;
+    transition: opacity 1.2s ease-in-out;
+    will-change: opacity;
+  }
+  .layer.visible { opacity: 1; }
+
+  #message {
+    position: fixed;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8rem;
+    padding: 2rem;
+    box-sizing: border-box;
+    color: #cfcfcf;
+    background: #000;
+    font: 400 1.4rem/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    text-align: center;
+  }
+  #message.show { display: flex; }
+  #message .hint { font-size: 1rem; color: #888; }
+  #message code {
+    font-family: ui-monospace, "DejaVu Sans Mono", monospace;
+    font-size: 0.95rem;
+    color: #e0e0e0;
+    background: #1c1c1c;
+    padding: 0.15em 0.45em;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+<img class="layer" id="layerA" alt="">
+<img class="layer" id="layerB" alt="">
+
+<div id="message">
+  <div id="messageText">Loading…</div>
+  <div class="hint" id="messageHint"></div>
+</div>
+
+<script>
+// Longest edge of the image we ask Google for. 2560 covers a 1080p screen
+// even when a portrait photo is cropped to fill it.
+const IMAGE_SIZE = "s2560";
+
+// How often to check whether the day has rolled over.
+const POLL_MS = 60 * 1000;
+
+const layers = [document.getElementById("layerA"), document.getElementById("layerB")];
+let front = 0;                 // index of the layer currently shown
+let currentUrl = null;
+let advancing = false;
+let consecutiveErrors = 0;
+
+const messageBox = document.getElementById("message");
+const messageText = document.getElementById("messageText");
+const messageHint = document.getElementById("messageHint");
+
+function showMessage(text, hint = "") {
+  messageText.textContent = text;
+  messageHint.innerHTML = hint;
+  messageBox.classList.add("show");
+}
+
+function hideMessage() {
+  messageBox.classList.remove("show");
+}
+
+// Swap the freshly-loaded image in and fade the old one out.
+function present(photo) {
+  const back = layers[1 - front];
+  const src = photo.url + "=" + IMAGE_SIZE;
+
+  back.onload = () => {
+    consecutiveErrors = 0;
+    hideMessage();
+    back.classList.add("visible");
+    layers[front].classList.remove("visible");
+    front = 1 - front;
+    currentUrl = photo.url;
+    advancing = false;
+  };
+
+  back.onerror = () => {
+    // A URL Google has rotated out. Skip past it rather than sit on a blank screen.
+    advancing = false;
+    consecutiveErrors += 1;
+    if (consecutiveErrors < 5) {
+      next();
+    } else {
+      showMessage(
+        "Cannot load photos from Google right now.",
+        "Check the Pi's internet connection. The frame will keep retrying."
+      );
+      consecutiveErrors = 0;
+      setTimeout(refresh, 60000);
+    }
+  };
+
+  back.src = src;
+}
+
+function handle(data) {
+  if (!data.photo) {
+    showMessage(
+      "No photos yet.",
+      'Add your Google Photos shared album links to <code>~/photoframe/albums.txt</code>, then run <code>~/photoframe/refresh.sh</code>'
+    );
+    advancing = false;
+    return;
+  }
+  if (data.photo.url === currentUrl) {
+    advancing = false;
+    return;            // already showing it; nothing to do
+  }
+  present(data.photo);
+}
+
+function refresh() {
+  fetch("/api/photo")
+    .then(r => r.json())
+    .then(handle)
+    .catch(() => {
+      advancing = false;
+      showMessage("Frame service not responding.", "It should come back on its own.");
+    });
+}
+
+function next() {
+  if (advancing) return;
+  advancing = true;
+  fetch("/api/next", { method: "POST" })
+    .then(r => r.json())
+    .then(handle)
+    .catch(() => { advancing = false; });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.code === "Space" || event.code === "ArrowRight" || event.code === "Enter") {
+    event.preventDefault();
+    next();
+  }
+});
+
+// Tap or click also advances, for the touchscreen.
+document.addEventListener("click", next);
+
+refresh();
+setInterval(refresh, POLL_MS);   // catches the once-a-day change
+</script>
+
+</body>
+</html>

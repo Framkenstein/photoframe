@@ -1,0 +1,14 @@
+# Your album links are effectively passwords -- anyone holding one can view
+# those photos. Never commit this file.
+albums.txt
+
+# Local runtime state and caches
+photos.json
+state.json
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
