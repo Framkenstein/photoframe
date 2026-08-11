@@ -1,14 +1,14 @@
 # photoframe
 
 A digital photo frame for a Raspberry Pi (or any Linux box) that shows photos
-from your **Google Photos shared albums** — one new photo per day, full screen.
+from your **Google Photos shared albums** — one new photo per hour, full screen.
 
 Nothing is downloaded or stored. The frame keeps a list of image URLs and
 streams each photo from Google when it displays it, so a Pi with a small SD
 card can show a library of any size.
 
 - **Set up in the browser** — paste your album links, press Go, done
-- **One photo per day**, changing at local midnight
+- **One photo per hour** (or per day - one setting)
 - **Space bar** (or click/tap) jumps to the next photo immediately
 - **Fills the screen edge to edge** — portrait photos are cropped to fill
   rather than letterboxed between black bars

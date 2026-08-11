@@ -11,7 +11,7 @@ import os
 import signal
 import threading
 import time
-from datetime import date
+from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -26,6 +26,15 @@ KIOSK_PID_FILE = BASE / ".kiosk.pid"
 # How often to re-read the albums: picks up newly added photos and refreshes
 # the image URLs before Google rotates them.
 REFRESH_EVERY_SECONDS = 6 * 60 * 60
+
+# How often the photo changes on its own. "%Y-%m-%dT%H" = a new photo each
+# hour; use "%Y-%m-%d" for one a day.
+PERIOD_FORMAT = "%Y-%m-%dT%H"
+
+
+def current_period():
+    """The current slot. When this string changes, the photo advances."""
+    return datetime.now().strftime(PERIOD_FORMAT)
 
 app = Flask(__name__, static_folder=None)
 
@@ -63,7 +72,7 @@ def _pick(advance):
         return None
 
     state = load_state()
-    today = date.today().isoformat()
+    today = current_period()
     index = _index_of(photos, state.get("current_url"))
 
     if index is None:
@@ -162,14 +171,14 @@ def api_albums_post():
 def api_photo():
     with _lock:
         photo = _pick(advance=False)
-    return jsonify({"photo": photo, "day": date.today().isoformat()})
+    return jsonify({"photo": photo, "day": current_period()})
 
 
 @app.route("/api/next", methods=["POST", "GET"])
 def api_next():
     with _lock:
         photo = _pick(advance=True)
-    return jsonify({"photo": photo, "day": date.today().isoformat()})
+    return jsonify({"photo": photo, "day": current_period()})
 
 
 @app.route("/api/status")
