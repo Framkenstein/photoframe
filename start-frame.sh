@@ -143,31 +143,13 @@ log "screen blanking disabled"
 #    rather than frame.log, which stays readable.
 # Wayfire does not reliably honour Chromium's kiosk fullscreen request -- it
 # leaves the window at its saved size (maximized:false) so the frame ends up as
-# an ordinary window nobody can see. Size it to the output explicitly as well.
-SCREEN=$(wlr-randr 2>/dev/null | awk '/\(current\)/ {print $1; exit}')
-SCREEN_W=${SCREEN%%x*}
-SCREEN_H=${SCREEN##*x}
-case "${SCREEN_W:-}${SCREEN_H:-}" in
-  ''|*[!0-9]*) SCREEN_W=1920; SCREEN_H=1080 ;;
-esac
-log "sizing frame to ${SCREEN_W}x${SCREEN_H}"
-
-log "opening frame (press Esc to exit)"
-chromium-browser \
-  --kiosk \
-  --start-fullscreen \
-  --window-position=0,0 \
-  --window-size="${SCREEN_W},${SCREEN_H}" \
-  --user-data-dir="$PROFILE" \
-  --noerrdialogs \
-  --disable-infobars \
-  --disable-session-crashed-bubble \
-  --disable-features=Translate,TranslateUI \
-  --disable-pinch \
-  --overscroll-history-navigation=0 \
-  --check-for-update-interval=31536000 \
-  "$FRAME_URL/frame" \
-  > "$BASE/chromium.log" 2>&1 9>&- &
+# Launch Chromium plainly. On this Pi (Wayfire 0.7.5) the window-sizing flags
+# are actively harmful: --kiosk, --start-fullscreen and --window-size all
+# produce a window a few percent of the screen, pinned to the top-left corner.
+# Plain Chromium opens a normal window, and the page takes fullscreen itself on
+# the first tap. Do not add sizing flags back.
+log "opening frame (tap the photo to go fullscreen, Esc to exit)"
+chromium-browser "$FRAME_URL/frame" > "$BASE/chromium.log" 2>&1 9>&- &
 
 KIOSK_PID=$!
 # Escape in the browser posts to /api/quit, which stops this PID.
