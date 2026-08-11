@@ -48,6 +48,19 @@ restore_blanking() {
 cleanup() {
   restore_blanking
   rm -f "$KIOSK_PID_FILE"
+  # Never leave browser processes behind: an orphan holding the kiosk profile
+  # makes the next launch hand off its URL and exit, which looks like the
+  # Desktop button doing nothing.
+  local pids
+  pids=$(kiosk_pids)
+  if [ -n "$pids" ]; then
+    # shellcheck disable=SC2086
+    kill $pids 2>/dev/null
+    sleep 1
+    pids=$(kiosk_pids)
+    # shellcheck disable=SC2086
+    [ -n "$pids" ] && kill -9 $pids 2>/dev/null
+  fi
 }
 # Only armed once we hold the lock, so a duplicate launch can never trigger it.
 trap cleanup EXIT INT TERM
@@ -57,15 +70,31 @@ trap cleanup EXIT INT TERM
 #    on our profile is left over from a run that was killed. Without this,
 #    Chromium hands the URL to that orphan and exits immediately, which looks
 #    like the button doing nothing at all.
-if pgrep -f -- "--user-data-dir=$PROFILE" >/dev/null 2>&1; then
+
+# Only ever match real browser processes. A bare `pkill -f` on the profile path
+# would also match any shell whose command line merely mentions it -- including
+# the one running this script.
+kiosk_pids() {
+  local pid comm
+  for pid in $(pgrep -f -- "--user-data-dir=$PROFILE" 2>/dev/null); do
+    [ "$pid" = "$$" ] && continue
+    comm=$(cat "/proc/$pid/comm" 2>/dev/null) || continue
+    case "$comm" in chromium*|chrome*) echo "$pid" ;; esac
+  done
+}
+
+if [ -n "$(kiosk_pids)" ]; then
   log "clearing orphaned kiosk browser"
-  pkill -f -- "--user-data-dir=$PROFILE"
-  for _ in $(seq 1 10); do
-    pgrep -f -- "--user-data-dir=$PROFILE" >/dev/null 2>&1 || break
+  # shellcheck disable=SC2046
+  kill $(kiosk_pids) 2>/dev/null
+  for _ in $(seq 1 12); do
+    [ -z "$(kiosk_pids)" ] && break
     sleep 0.5
   done
-  pkill -9 -f -- "--user-data-dir=$PROFILE" 2>/dev/null
-  sleep 1
+  if [ -n "$(kiosk_pids)" ]; then
+    kill -9 $(kiosk_pids) 2>/dev/null
+    sleep 1
+  fi
 fi
 
 # 1. Make sure the frame service is up.
@@ -104,11 +133,31 @@ restore_blanking
 log "screen blanking disabled"
 
 # 3. Fullscreen browser, in its own profile so normal browsing is untouched.
-#    Chromium on the Pi is noisy about missing UPower/video devices; none of it
-#    matters here, so keep it out of the log.
+#
+#    `9>&-` closes the lock file descriptor for the browser. Without it Chromium
+#    inherits fd 9 and keeps holding the flock after this script exits, so every
+#    later launch is refused with "already running" and the Desktop button stops
+#    working entirely.
+#
+#    Chromium's own noise (missing UPower, no /dev/video10) goes to its own log
+#    rather than frame.log, which stays readable.
+# Wayfire does not reliably honour Chromium's kiosk fullscreen request -- it
+# leaves the window at its saved size (maximized:false) so the frame ends up as
+# an ordinary window nobody can see. Size it to the output explicitly as well.
+SCREEN=$(wlr-randr 2>/dev/null | awk '/\(current\)/ {print $1; exit}')
+SCREEN_W=${SCREEN%%x*}
+SCREEN_H=${SCREEN##*x}
+case "${SCREEN_W:-}${SCREEN_H:-}" in
+  ''|*[!0-9]*) SCREEN_W=1920; SCREEN_H=1080 ;;
+esac
+log "sizing frame to ${SCREEN_W}x${SCREEN_H}"
+
 log "opening frame (press Esc to exit)"
 chromium-browser \
   --kiosk \
+  --start-fullscreen \
+  --window-position=0,0 \
+  --window-size="${SCREEN_W},${SCREEN_H}" \
   --user-data-dir="$PROFILE" \
   --noerrdialogs \
   --disable-infobars \
@@ -117,9 +166,8 @@ chromium-browser \
   --disable-pinch \
   --overscroll-history-navigation=0 \
   --check-for-update-interval=31536000 \
-  --start-fullscreen \
   "$FRAME_URL/frame" \
-  > >(grep -viE "UPower|v4l2_utils|gpu_init|close object|extension_registrar|object_proxy") 2>&1 &
+  > "$BASE/chromium.log" 2>&1 9>&- &
 
 KIOSK_PID=$!
 # Escape in the browser posts to /api/quit, which stops this PID.
