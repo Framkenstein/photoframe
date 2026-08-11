@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Google serves 429 to image requests that carry a Referer from an unrelated
+     origin. The same URL returns 200 with no Referer, so send none. -->
+<meta name="referrer" content="no-referrer">
 <title>Photo Frame</title>
 <style>
   html, body {
@@ -72,8 +75,8 @@
 </head>
 <body>
 
-<img class="layer" id="layerA" alt="">
-<img class="layer" id="layerB" alt="">
+<img class="layer" referrerpolicy="no-referrer" id="layerA" alt="">
+<img class="layer" referrerpolicy="no-referrer" id="layerB" alt="">
 
 <div id="settingsCorner" title="Settings" aria-label="Settings"></div>
 

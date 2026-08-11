@@ -173,6 +173,12 @@ Create link. If the link definitely works in a private browser window and the
 count is still 0, Google has likely changed their page format — please
 [open an issue](https://github.com/Framkenstein/photoframe/issues).
 
+**"Cannot load photos from Google right now"**
+Google returns `429` to image requests that carry a `Referer` header from an
+unrelated origin — the identical URL returns `200` with no referrer. The page
+sends none (`referrerpolicy="no-referrer"` plus a `<meta name="referrer">`).
+If you fork the display, keep both.
+
 **Screen goes black after a while**
 The launcher disables blanking on Wayfire only. On another desktop, disable
 screen blanking and power saving in its settings.
