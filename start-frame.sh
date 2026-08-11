@@ -15,6 +15,7 @@ BLOCK_LINES=4          # lines we append after the marker line itself
 PROFILE="$HOME/.config/photoframe-kiosk"
 BASE="$(cd "$(dirname "$0")" && pwd)"
 LOCKFILE="$BASE/.frame.lock"
+KIOSK_PID_FILE="$BASE/.kiosk.pid"
 
 # Launched from a Desktop button there is no terminal to print to.
 if [ ! -t 1 ]; then
@@ -44,8 +45,28 @@ restore_blanking() {
     log "screen blanking restored"
   fi
 }
+cleanup() {
+  restore_blanking
+  rm -f "$KIOSK_PID_FILE"
+}
 # Only armed once we hold the lock, so a duplicate launch can never trigger it.
-trap restore_blanking EXIT INT TERM
+trap cleanup EXIT INT TERM
+
+# 0. Clear any orphaned browser still holding the kiosk profile.
+#    We hold the lock, so no legitimate launcher is running -- anything still
+#    on our profile is left over from a run that was killed. Without this,
+#    Chromium hands the URL to that orphan and exits immediately, which looks
+#    like the button doing nothing at all.
+if pgrep -f -- "--user-data-dir=$PROFILE" >/dev/null 2>&1; then
+  log "clearing orphaned kiosk browser"
+  pkill -f -- "--user-data-dir=$PROFILE"
+  for _ in $(seq 1 10); do
+    pgrep -f -- "--user-data-dir=$PROFILE" >/dev/null 2>&1 || break
+    sleep 0.5
+  done
+  pkill -9 -f -- "--user-data-dir=$PROFILE" 2>/dev/null
+  sleep 1
+fi
 
 # 1. Make sure the frame service is up.
 if ! curl -fsS -o /dev/null --max-time 3 "$FRAME_URL/api/status" 2>/dev/null; then
@@ -85,7 +106,7 @@ log "screen blanking disabled"
 # 3. Fullscreen browser, in its own profile so normal browsing is untouched.
 #    Chromium on the Pi is noisy about missing UPower/video devices; none of it
 #    matters here, so keep it out of the log.
-log "opening frame (Alt+F4 to exit)"
+log "opening frame (press Esc to exit)"
 chromium-browser \
   --kiosk \
   --user-data-dir="$PROFILE" \
@@ -97,7 +118,13 @@ chromium-browser \
   --overscroll-history-navigation=0 \
   --check-for-update-interval=31536000 \
   --start-fullscreen \
-  "$FRAME_URL/frame" 2>&1 | grep -viE "UPower|v4l2_utils|gpu_init|close object|extension_registrar|object_proxy"
+  "$FRAME_URL/frame" \
+  > >(grep -viE "UPower|v4l2_utils|gpu_init|close object|extension_registrar|object_proxy") 2>&1 &
 
+KIOSK_PID=$!
+# Escape in the browser posts to /api/quit, which stops this PID.
+echo "$KIOSK_PID" > "$KIOSK_PID_FILE"
+
+wait "$KIOSK_PID"
 log "frame closed"
 # trap restores blanking on the way out

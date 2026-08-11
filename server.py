@@ -7,6 +7,8 @@ Runs on http://localhost:8081
 """
 
 import json
+import os
+import signal
 import threading
 import time
 from datetime import date
@@ -18,6 +20,8 @@ import scrape
 
 BASE = Path(__file__).resolve().parent
 STATE_FILE = BASE / "state.json"
+# Written by start-frame.sh so Escape can stop the browser it launched.
+KIOSK_PID_FILE = BASE / ".kiosk.pid"
 
 # How often to re-read the albums: picks up newly added photos and refreshes
 # the image URLs before Google rotates them.
@@ -165,6 +169,33 @@ def api_status():
             "state": load_state(),
         }
     )
+
+
+@app.route("/api/quit", methods=["POST"])
+def api_quit():
+    """Close the fullscreen frame.
+
+    Chromium's kiosk mode ignores Escape, and a page cannot close a window it
+    did not open, so the key press comes here instead and we stop the browser
+    the launcher started. The launcher records its PID on the way up.
+    """
+    if not KIOSK_PID_FILE.exists():
+        return jsonify({"stopped": False, "reason": "not running as a kiosk"}), 409
+
+    try:
+        pid = int(KIOSK_PID_FILE.read_text().strip())
+    except (ValueError, OSError):
+        return jsonify({"stopped": False, "reason": "bad pid file"}), 500
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        KIOSK_PID_FILE.unlink(missing_ok=True)
+        return jsonify({"stopped": False, "reason": "already gone"}), 409
+    except PermissionError:
+        return jsonify({"stopped": False, "reason": "not permitted"}), 403
+
+    return jsonify({"stopped": True})
 
 
 @app.route("/api/refresh", methods=["POST", "GET"])

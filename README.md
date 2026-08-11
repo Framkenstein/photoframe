@@ -100,10 +100,11 @@ Click the **Photo Frame** button on your Desktop, or open
 | Click or tap | Next photo |
 | <kbd>S</kbd> | Change your albums |
 | Tap the top-right corner | Change your albums (no keyboard needed) |
-| <kbd>Alt</kbd>+<kbd>F4</kbd> | Exit the frame |
+| <kbd>Esc</kbd> | Exit the frame |
 
-<kbd>Esc</kbd> does **not** exit — Chromium's kiosk mode ignores it. Use
-<kbd>Alt</kbd>+<kbd>F4</kbd>.
+Chromium's kiosk mode swallows <kbd>Esc</kbd> and a page cannot close a window
+it did not open, so the key posts to `/api/quit` and the server stops the
+browser the launcher started. <kbd>Alt</kbd>+<kbd>F4</kbd> also works.
 
 The frame remembers which photo it was on, so a reboot or a power cut brings
 back the same one rather than jumping somewhere random.

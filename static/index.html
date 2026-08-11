@@ -170,6 +170,24 @@ function refresh() {
     });
 }
 
+function quit() {
+  fetch("/api/quit", { method: "POST" })
+    .then(async (r) => ({ ok: r.ok, data: await r.json() }))
+    .then(({ ok, data }) => {
+      if (ok) {
+        showMessage("Closing…");
+      } else {
+        // Opened in an ordinary browser tab rather than the frame launcher.
+        showMessage(
+          "Nothing to close.",
+          "Escape only closes the fullscreen frame started from the Photo Frame button."
+        );
+        setTimeout(hideMessage, 4000);
+      }
+    })
+    .catch(() => {});
+}
+
 function next() {
   if (advancing) return;
   advancing = true;
@@ -185,11 +203,16 @@ document.addEventListener("keydown", (event) => {
     next();
   }
   // In kiosk mode there is no address bar, so give the settings screen a key.
-  // Deliberately not Escape -- people expect that to close the frame, and
-  // Chromium's kiosk mode ignores it, so binding it here would just confuse.
   if (event.code === "KeyS") {
     event.preventDefault();
     location.href = "/setup";
+  }
+
+  // Chromium's kiosk mode swallows Escape, and a page cannot close a window it
+  // did not open -- so ask the server to stop the browser it launched.
+  if (event.code === "Escape") {
+    event.preventDefault();
+    quit();
   }
 });
 
