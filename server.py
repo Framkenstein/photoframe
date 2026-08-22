@@ -14,8 +14,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, redirect, request, send_from_directory
 
+import icloud
 import scrape
 
 BASE = Path(__file__).resolve().parent
@@ -133,6 +134,35 @@ def index():
     return send_from_directory(BASE / "static", "index.html")
 
 
+# Apple's signed asset URLs last about an hour, so resolve them on demand and
+# keep each one only briefly. The frame changes photo hourly, so this is a
+# handful of requests a day.
+_icloud_cache = {}
+_ICLOUD_TTL = 40 * 60
+
+
+@app.route("/icloud/<token>/<checksum>")
+def icloud_photo(token, checksum):
+    now = time.time()
+    hit = _icloud_cache.get((token, checksum))
+    if hit and hit[1] > now:
+        return redirect(hit[0], code=302)
+
+    try:
+        url = icloud.resolve_one(token, checksum)
+    except Exception as exc:
+        return jsonify({"error": f"iCloud lookup failed: {exc}"}), 502
+    if not url:
+        return jsonify({"error": "photo not found in that album"}), 404
+
+    _icloud_cache[(token, checksum)] = (url, now + _ICLOUD_TTL)
+    if len(_icloud_cache) > 5000:                     # keep it from growing forever
+        for k, v in list(_icloud_cache.items()):
+            if v[1] <= now:
+                _icloud_cache.pop(k, None)
+    return redirect(url, code=302)
+
+
 @app.route("/offline/<key>/<name>")
 def offline_file(key, name):
     return send_from_directory(scrape.OFFLINE_DIR / key, name)
@@ -171,7 +201,7 @@ def api_albums_post():
         return (
             jsonify(
                 {
-                    "error": "Those do not look like Google Photos album links.",
+                    "error": "Those do not look like Google Photos or iCloud shared album links.",
                     "invalid": bad,
                 }
             ),

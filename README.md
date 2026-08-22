@@ -1,12 +1,14 @@
 # photoframe
 
 A digital photo frame for a Raspberry Pi (or any Linux box) that shows photos
-from your **Google Photos shared albums** — one new photo per hour, full screen.
+from your **Google Photos** and **Apple iCloud** shared albums — one new photo
+per hour, full screen.
 
 Nothing is downloaded or stored. The frame keeps a list of image URLs and
 streams each photo from Google when it displays it, so a Pi with a small SD
 card can show a library of any size.
 
+- **Google Photos and iCloud** — mix albums from both in one frame
 - **Set up in the browser** — paste your album links, press Go, done
 - **One photo per hour** (or per day - one setting)
 - **Space bar** (or click/tap) jumps to the next photo immediately
@@ -27,6 +29,10 @@ library, and it rules out the obvious way to build a frame.
 
 This project takes the remaining route: you make an album **link-shared**, and
 the frame reads that public page the same way a browser would.
+
+Apple is friendlier. iCloud shared albums that have **Public Website** switched
+on are served by a small JSON API, so that half is a proper API client rather
+than a scrape — see [`icloud.py`](icloud.py).
 
 > [!IMPORTANT]
 > This uses no official API. It reads the JSON blob Google embeds in the public
@@ -64,18 +70,21 @@ the frame.
 To change your albums later, go to <http://localhost:8081/setup> — your current
 links are already filled in.
 
-For each album you want, the link comes from Google Photos:
+**Google Photos:** open the album → **Share** → **Create link**.
 
-1. Open the album
-2. **Share** → **Create link**
-3. Copy the link
+**Apple Photos:** open the shared album → the people icon → turn on
+**Public Website** → copy the link.
 
-Both link formats work:
+All of these formats work:
 
 ```
 https://photos.app.goo.gl/aBcDeFgHiJkLmNoP
 https://photos.google.com/share/AF1QipMxxxx?key=yyyy
+https://www.icloud.com/sharedalbum/#B0AbCdEfGhIjK
+https://share.icloud.com/photos/0AbCdEfGhIjK
 ```
+
+Albums from both services can be mixed in the same frame.
 
 <details>
 <summary>Prefer a text file?</summary>
@@ -152,7 +161,10 @@ setup screen ──> albums.txt ──> scrape.py ──> photos.json ──> se
                                 pages)                                       = next)
 ```
 
-- **`scrape.py`** fetches each shared-album page and pulls out image URLs with
+- **`icloud.py`** talks to Apple's shared-album API. Its asset URLs expire in
+  about an hour, so photos are stored as a checksum and resolved to a fresh URL
+  through the frame's own `/icloud` route when displayed, rather than cached.
+- **`scrape.py`** fetches each Google shared-album page and pulls out image URLs with
   their dimensions. Photos smaller than 300px are skipped (avatars, icons).
   Results are cached in `photos.json`. A failing album is reported and skipped
   rather than sinking the whole refresh.
@@ -192,13 +204,18 @@ reason.
 | `POST /api/albums` | Replace album links, then re-scrape |
 | `GET /api/status` | Photo count, per-album results, current state |
 | `POST /api/refresh` | Force a re-scrape |
+| `GET /icloud/<token>/<checksum>` | Redirect to a freshly signed iCloud photo URL |
 
 ## Troubleshooting
 
 **"No photos yet" on screen**
 No albums are configured. Open <http://localhost:8081/setup> and add one.
 
-**An album reports 0 photos**
+**An iCloud album reports 0 photos**
+The album needs **Public Website** switched on: open it in Photos, tap the
+people icon, and enable it. A shared album that is invite-only is not readable.
+
+**A Google album reports 0 photos**
 Almost always the album is not link-shared. Open it in Google Photos → Share →
 Create link. If the link definitely works in a private browser window and the
 count is still 0, Google has likely changed their page format — please

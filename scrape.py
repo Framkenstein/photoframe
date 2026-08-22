@@ -19,6 +19,8 @@ from pathlib import Path
 
 import requests
 
+import icloud
+
 BASE = Path(__file__).resolve().parent
 ALBUMS_FILE = BASE / "albums.txt"
 PHOTOS_FILE = BASE / "photos.json"
@@ -71,10 +73,38 @@ def write_album_urls(urls):
 
 def looks_like_album_url(url):
     """Cheap sanity check so obvious typos get caught before we fetch."""
-    url = url.strip().lower()
-    return url.startswith("http") and (
-        "photos.app.goo.gl" in url or "photos.google.com" in url
-    )
+    u = url.strip()
+    if not u.lower().startswith("http"):
+        return False
+    if "photos.app.goo.gl" in u.lower() or "photos.google.com" in u.lower():
+        return True
+    return icloud.looks_like_icloud_url(u)
+
+
+def is_icloud(url):
+    return icloud.looks_like_icloud_url(url)
+
+
+def album_photos(url):
+    """(title, photos) for an album link, whichever service it belongs to.
+
+    Google photos carry a base URL the display appends a size to. iCloud asset
+    URLs expire within the hour, so those are stored as a checksum and resolved
+    through our own /icloud route at display time instead.
+    """
+    if is_icloud(url):
+        title, items, token = icloud.fetch_album(url)
+        photos = [{
+            "url": f"/icloud/{token}/{it['checksum']}",
+            "w": it["w"], "h": it["h"],
+            "album": title,
+            "local": True,          # already a usable URL; no size suffix
+            "source": "icloud",
+            "token": token,
+            "checksum": it["checksum"],
+        } for it in items]
+        return title, photos
+    return scrape_album(url)
 
 
 def scrape_album(url):
@@ -123,7 +153,7 @@ def refresh():
 
     for url in album_urls:
         try:
-            title, photos = scrape_album(url)
+            title, photos = album_photos(url)
         except Exception as exc:  # one bad album must not sink the rest
             print(f"  FAILED  {url}\n          {type(exc).__name__}: {exc}")
             album_report.append({"url": url, "title": None, "count": 0, "ok": False})
@@ -248,8 +278,14 @@ def download_album(url, progress=None):
     Google rejects image requests carrying a Referer, so we send none -- the
     same reason the display sets referrerpolicy="no-referrer".
     """
-    title, photos = scrape_album(url)
+    title, photos = album_photos(url)
     photos = stable_order(photos)
+
+    # iCloud URLs are signed and short-lived, so fetch a fresh batch to download.
+    icloud_urls = {}
+    if photos and photos[0].get("source") == "icloud":
+        token = photos[0]["token"]
+        icloud_urls = icloud.resolve_urls(token, [p["checksum"] for p in photos])
     d = album_dir(url)
     d.mkdir(parents=True, exist_ok=True)
     (d / "meta.json").write_text(json.dumps({"url": url, "title": title}))
@@ -266,11 +302,18 @@ def download_album(url, progress=None):
             if progress:
                 progress(done, total)
             continue
+        if photo.get("source") == "icloud":
+            remote = icloud_urls.get(photo.get("checksum"))
+            if not remote:
+                continue
+        else:
+            remote = photo["url"] + "=" + OFFLINE_IMAGE_SIZE
+
         try:
-            r = session.get(photo["url"] + "=" + OFFLINE_IMAGE_SIZE, timeout=60)
+            r = session.get(remote, timeout=60)
             if r.status_code == 429:      # backed off, try once more
                 time.sleep(5)
-                r = session.get(photo["url"] + "=" + OFFLINE_IMAGE_SIZE, timeout=60)
+                r = session.get(remote, timeout=60)
             r.raise_for_status()
             target.write_bytes(r.content)
             done += 1
