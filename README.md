@@ -112,6 +112,22 @@ back the same one rather than jumping somewhere random.
 Advancing manually does not disturb the schedule: the photo you land on stays
 until the next midnight.
 
+## Offline demo mode
+
+For showing the frame somewhere with no internet, it can run from bundled
+sample photos instead of Google:
+
+```bash
+./demo.sh on      # sample photos, no internet needed
+./demo.sh off     # back to your albums
+./demo.sh status
+```
+
+`on` downloads 24 sample photos the first time (16 landscape, 8 portrait, so
+the crop-to-fill behaviour is visible on both) and serves them from the frame
+itself. Do that once while you still have internet. Your album links are left
+untouched, so `off` puts everything back.
+
 ## How it works
 
 ```

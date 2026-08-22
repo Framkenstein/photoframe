@@ -14,3 +14,10 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# Demo photos are downloaded by demo.sh, not committed
+demo/*.jpg
+demo/*.jpeg
+demo/*.png
+demo/*.webp
+demo/enabled

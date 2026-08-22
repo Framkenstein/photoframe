@@ -153,6 +153,35 @@ def load():
     return {"photos": [], "albums": []}
 
 
+
+# --- Offline demo mode -------------------------------------------------------
+# Lets the frame run with no internet at all (conference stands, demos).
+# Photos live in demo/ and are served by our own server rather than Google.
+
+DEMO_DIR = BASE / "demo"
+DEMO_FLAG = DEMO_DIR / "enabled"
+
+
+def demo_enabled():
+    return DEMO_FLAG.exists()
+
+
+def demo_photos():
+    """Local demo images, ordered the same stable way as real ones."""
+    if not DEMO_DIR.is_dir():
+        return []
+    photos = []
+    for f in sorted(DEMO_DIR.iterdir()):
+        if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
+            photos.append({
+                "url": "/demo/" + f.name,
+                "w": 0, "h": 0,
+                "album": "Demo album (offline)",
+                "local": True,
+            })
+    return stable_order(photos)
+
+
 if __name__ == "__main__":
     result = refresh()
     sys.exit(0 if result["photos"] else 1)

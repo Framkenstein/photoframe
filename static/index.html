@@ -116,7 +116,7 @@ function hideMessage() {
 // Swap the freshly-loaded image in and fade the old one out.
 function present(photo) {
   const back = layers[1 - front];
-  const src = photo.url + "=" + IMAGE_SIZE;
+  const src = photo.local ? photo.url : photo.url + "=" + IMAGE_SIZE;
 
   back.onload = () => {
     consecutiveErrors = 0;

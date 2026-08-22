@@ -61,13 +61,20 @@ def _index_of(photos, url):
     return None
 
 
+def photo_list():
+    """Demo photos when demo mode is on, otherwise the scraped Google ones."""
+    if scrape.demo_enabled():
+        return scrape.demo_photos()
+    return scrape.load()["photos"]
+
+
 def _pick(advance):
     """Return the photo to display. Advances if asked, or if the day rolled over.
 
     Keeping the current photo's URL (rather than an index) means a refresh that
     adds or removes photos never knocks the frame onto a random image.
     """
-    photos = scrape.load()["photos"]
+    photos = photo_list()
     if not photos:
         return None
 
@@ -113,9 +120,14 @@ def no_cache(response):
 def index():
     # First run with nothing configured yet -> send people to setup instead of
     # a black screen.
-    if not scrape.read_album_urls():
+    if not scrape.demo_enabled() and not scrape.read_album_urls():
         return send_from_directory(BASE / "static", "setup.html")
     return send_from_directory(BASE / "static", "index.html")
+
+
+@app.route("/demo/<path:name>")
+def demo_file(name):
+    return send_from_directory(BASE / "demo", name)
 
 
 @app.route("/frame")
