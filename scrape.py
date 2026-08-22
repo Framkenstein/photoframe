@@ -14,6 +14,7 @@ import hashlib
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -180,6 +181,132 @@ def demo_photos():
                 "local": True,
             })
     return stable_order(photos)
+
+
+
+
+# --- Offline albums ----------------------------------------------------------
+# Cache chosen albums on disk so the frame keeps working with no internet.
+# Each album lives in offline/<key>/ with a meta.json describing it.
+
+OFFLINE_DIR = BASE / "offline"
+OFFLINE_FLAG = OFFLINE_DIR / "enabled"
+OFFLINE_IMAGE_SIZE = "s2560"   # matches what the display asks Google for
+
+
+def offline_enabled():
+    return OFFLINE_FLAG.exists()
+
+
+def set_offline(enabled):
+    OFFLINE_DIR.mkdir(exist_ok=True)
+    if enabled:
+        OFFLINE_FLAG.touch()
+    else:
+        OFFLINE_FLAG.unlink(missing_ok=True)
+    return offline_enabled()
+
+
+def album_key(url):
+    """Stable directory name for an album link."""
+    return hashlib.sha1(url.strip().encode()).hexdigest()[:12]
+
+
+def album_dir(url):
+    return OFFLINE_DIR / album_key(url)
+
+
+def album_cache_info(url):
+    """How much of this album is cached: (count, bytes, title)."""
+    d = album_dir(url)
+    if not d.is_dir():
+        return 0, 0, None
+    title = None
+    meta = d / "meta.json"
+    if meta.exists():
+        try:
+            title = json.loads(meta.read_text()).get("title")
+        except (json.JSONDecodeError, OSError):
+            pass
+    files = [f for f in d.iterdir() if f.suffix.lower() == ".jpg"]
+    return len(files), sum(f.stat().st_size for f in files), title
+
+
+def delete_album_cache(url):
+    d = album_dir(url)
+    if d.is_dir():
+        for f in d.iterdir():
+            f.unlink()
+        d.rmdir()
+        return True
+    return False
+
+
+def download_album(url, progress=None):
+    """Fetch an album's photos to disk. progress(done, total) is called as it goes.
+
+    Google rejects image requests carrying a Referer, so we send none -- the
+    same reason the display sets referrerpolicy="no-referrer".
+    """
+    title, photos = scrape_album(url)
+    photos = stable_order(photos)
+    d = album_dir(url)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "meta.json").write_text(json.dumps({"url": url, "title": title}))
+
+    total = len(photos)
+    done = 0
+    session = requests.Session()
+    session.headers.update({"User-Agent": UA})
+
+    for i, photo in enumerate(photos):
+        target = d / f"{i:05d}.jpg"
+        if target.exists() and target.stat().st_size > 0:
+            done += 1
+            if progress:
+                progress(done, total)
+            continue
+        try:
+            r = session.get(photo["url"] + "=" + OFFLINE_IMAGE_SIZE, timeout=60)
+            if r.status_code == 429:      # backed off, try once more
+                time.sleep(5)
+                r = session.get(photo["url"] + "=" + OFFLINE_IMAGE_SIZE, timeout=60)
+            r.raise_for_status()
+            target.write_bytes(r.content)
+            done += 1
+        except Exception:
+            target.unlink(missing_ok=True)   # leave a gap rather than a broken file
+        if progress:
+            progress(done, total)
+
+    return {"title": title, "downloaded": done, "total": total}
+
+
+def offline_photos():
+    """Every cached photo, across all cached albums."""
+    if not OFFLINE_DIR.is_dir():
+        return []
+    photos = []
+    for d in sorted(OFFLINE_DIR.iterdir()):
+        if not d.is_dir():
+            continue
+        title = "Offline album"
+        meta = d / "meta.json"
+        if meta.exists():
+            try:
+                title = json.loads(meta.read_text()).get("title") or title
+            except (json.JSONDecodeError, OSError):
+                pass
+        for f in sorted(d.iterdir()):
+            if f.suffix.lower() == ".jpg":
+                photos.append({
+                    "url": f"/offline/{d.name}/{f.name}",
+                    "w": 0, "h": 0,
+                    "album": title,
+                    "local": True,
+                })
+    return stable_order(photos)
+
 
 
 if __name__ == "__main__":

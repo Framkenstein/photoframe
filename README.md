@@ -112,6 +112,21 @@ back the same one rather than jumping somewhere random.
 Advancing manually does not disturb the schedule: the photo you land on stays
 until the next midnight.
 
+## Offline albums
+
+The frame normally streams from Google, so it stops working without internet.
+On the setup screen each album has a **Download** button that caches it to this
+device, and a **Use offline photos** switch that makes the frame play from the
+cache instead.
+
+- Download only the albums you want offline; the rest keep streaming
+- Progress is shown per album while it downloads
+- Interrupted downloads resume — already-fetched photos are skipped
+- **Remove** frees the space again
+- Expect roughly 0.7 MB per photo
+
+Cached photos live in `offline/`, which is gitignored: they are your photos.
+
 ## Offline demo mode
 
 For showing the frame somewhere with no internet, it can run from bundled

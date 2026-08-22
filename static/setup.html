@@ -141,6 +141,39 @@
   .result .count.zero { color: var(--bad); }
   .result .name { color: var(--muted); word-break: break-all; }
 
+
+  .offline-row {
+    display: flex; align-items: center; gap: .8rem;
+    padding: .75rem 0; border-top: 1px solid var(--line);
+    font-size: .95rem;
+  }
+  .offline-row:first-of-type { border-top: none; }
+  .offline-name { flex: 1; min-width: 0; word-break: break-all; color: var(--text); }
+  .offline-sub { display: block; color: var(--muted); font-size: .82rem; margin-top: .15rem; }
+  .offline-row button { padding: .5rem .9rem; font-size: .9rem; white-space: nowrap; }
+  .offline-row button.danger:hover:not(:disabled) { color: var(--bad); }
+  .cached { color: var(--good); }
+
+  .toggle-row {
+    display: flex; align-items: center; gap: .8rem;
+    margin-top: 1.25rem; padding-top: 1.1rem; border-top: 1px solid var(--line);
+  }
+  .toggle-row .label { flex: 1; }
+  .toggle-row .label small { display: block; color: var(--muted); font-size: .85rem; margin-top: .15rem; }
+  .switch { position: relative; width: 3.1rem; height: 1.7rem; flex: none; }
+  .switch input { opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .switch span {
+    position: absolute; inset: 0; border-radius: 999px;
+    background: #3a3f47; transition: background .15s; pointer-events: none;
+  }
+  .switch span::after {
+    content: ""; position: absolute; top: .22rem; left: .22rem;
+    width: 1.26rem; height: 1.26rem; border-radius: 50%;
+    background: #fff; transition: transform .15s;
+  }
+  .switch input:checked + span { background: var(--accent); }
+  .switch input:checked + span::after { transform: translateX(1.4rem); }
+
   .warn {
     margin-top: 2rem;
     font-size: .875rem;
@@ -190,6 +223,27 @@
   </div>
 
   <div id="status"></div>
+
+  <h1 style="font-size:1.25rem;margin:2.5rem 0 .3rem">Offline photos</h1>
+  <p class="sub" style="margin-bottom:1.2rem">
+    Download albums to this device so the frame works without internet.
+  </p>
+
+  <div class="card" id="offlineCard">
+    <div id="offlineRows"><div class="note">Loading…</div></div>
+
+    <div class="toggle-row">
+      <div class="label">
+        Use offline photos
+        <small id="offlineHint">Show downloaded photos instead of streaming from Google.</small>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="offlineToggle">
+        <span></span>
+      </label>
+    </div>
+  </div>
+
 
   <p class="warn">
     Anyone with one of these links can view that album without signing in, so
@@ -343,6 +397,101 @@ function escapeHtml(s) {
 
 addBtn.addEventListener("click", () => addRow("", true));
 goBtn.addEventListener("click", submit);
+
+
+// ---- Offline albums --------------------------------------------------------
+const offlineRows = document.getElementById("offlineRows");
+const offlineToggle = document.getElementById("offlineToggle");
+const offlineHint = document.getElementById("offlineHint");
+let offlinePoll = null;
+
+function human(bytes) {
+  if (!bytes) return "";
+  const mb = bytes / 1048576;
+  return mb >= 1024 ? (mb / 1024).toFixed(1) + " GB" : Math.round(mb) + " MB";
+}
+
+function renderOffline(data) {
+  offlineToggle.checked = !!data.enabled;
+  const anyCached = data.albums.some(a => a.cached > 0);
+  offlineToggle.disabled = !anyCached;
+  offlineHint.textContent = anyCached
+    ? "Show downloaded photos instead of streaming from Google."
+    : "Download an album first.";
+
+  let busy = false;
+  offlineRows.innerHTML = "";
+
+  data.albums.forEach((a) => {
+    const row = document.createElement("div");
+    row.className = "offline-row";
+
+    const name = document.createElement("div");
+    name.className = "offline-name";
+    const label = a.title || a.url;
+    let sub = "Not downloaded";
+    const job = a.job;
+
+    if (job && job.state === "running") {
+      busy = true;
+      sub = job.total
+        ? `Downloading ${job.done} of ${job.total}…`
+        : "Reading album…";
+    } else if (job && job.state === "error") {
+      sub = "Failed: " + job.error;
+    } else if (a.cached) {
+      sub = `${a.cached} photos offline · ${human(a.bytes)}`;
+    }
+    name.innerHTML = `${escapeHtml(label)}<small class="offline-sub${a.cached && !(job && job.state === "running") ? " cached" : ""}">${escapeHtml(sub)}</small>`;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    if (job && job.state === "running") {
+      btn.textContent = "Downloading…";
+      btn.disabled = true;
+    } else if (a.cached) {
+      btn.textContent = "Remove";
+      btn.className = "danger";
+      btn.addEventListener("click", () => post("/api/offline/delete", { url: a.url }));
+    } else {
+      btn.textContent = "Download";
+      btn.addEventListener("click", () => {
+        btn.disabled = true; btn.textContent = "Starting…";
+        post("/api/offline/download", { url: a.url });
+      });
+    }
+
+    row.append(name, btn);
+    offlineRows.append(row);
+  });
+
+  // Poll only while something is downloading.
+  if (busy && !offlinePoll) offlinePoll = setInterval(loadOffline, 1500);
+  if (!busy && offlinePoll) { clearInterval(offlinePoll); offlinePoll = null; }
+}
+
+function loadOffline() {
+  fetch("/api/offline").then(r => r.json()).then(renderOffline).catch(() => {});
+}
+
+function post(path, body) {
+  return fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then(async r => {
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok && d.error) showError(d.error);
+    loadOffline();
+    return d;
+  }).catch(() => {});
+}
+
+offlineToggle.addEventListener("change", () => {
+  post("/api/offline/mode", { enabled: offlineToggle.checked });
+});
+
+loadOffline();
 
 // Prefill with whatever is already configured.
 fetch("/api/albums")

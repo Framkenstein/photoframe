@@ -21,3 +21,6 @@ demo/*.jpeg
 demo/*.png
 demo/*.webp
 demo/enabled
+
+# Cached offline albums (your photos - never commit)
+offline/

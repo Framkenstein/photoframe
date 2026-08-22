@@ -62,7 +62,15 @@ def _index_of(photos, url):
 
 
 def photo_list():
-    """Demo photos when demo mode is on, otherwise the scraped Google ones."""
+    """Where photos come from, most specific first.
+
+    Offline albums win when enabled, so the frame keeps working with no
+    internet at all.
+    """
+    if scrape.offline_enabled():
+        cached = scrape.offline_photos()
+        if cached:
+            return cached
     if scrape.demo_enabled():
         return scrape.demo_photos()
     return scrape.load()["photos"]
@@ -125,6 +133,11 @@ def index():
     return send_from_directory(BASE / "static", "index.html")
 
 
+@app.route("/offline/<key>/<name>")
+def offline_file(key, name):
+    return send_from_directory(scrape.OFFLINE_DIR / key, name)
+
+
 @app.route("/demo/<path:name>")
 def demo_file(name):
     return send_from_directory(BASE / "demo", name)
@@ -177,6 +190,86 @@ def api_albums_post():
     return jsonify(
         {"photo_count": len(data["photos"]), "albums": data.get("albums", [])}
     )
+
+
+# Album downloads run in the background; the setup page polls for progress.
+_downloads = {}
+
+
+def _album_report():
+    # Titles for albums that are not cached yet come from the last scrape, so
+    # the list reads as album names rather than a column of URLs.
+    known = {}
+    for a in scrape.load().get("albums", []):
+        if a.get("title"):
+            known[a["url"]] = a["title"]
+
+    out = []
+    for url in scrape.read_album_urls():
+        count, size, title = scrape.album_cache_info(url)
+        title = title or known.get(url)
+        job = _downloads.get(url)
+        out.append({
+            "url": url,
+            "title": title,
+            "cached": count,
+            "bytes": size,
+            "job": job,
+        })
+    return out
+
+
+@app.route("/api/offline")
+def api_offline():
+    return jsonify({"enabled": scrape.offline_enabled(), "albums": _album_report()})
+
+
+@app.route("/api/offline/mode", methods=["POST"])
+def api_offline_mode():
+    want = bool((request.get_json(silent=True) or {}).get("enabled"))
+    if want and not scrape.offline_photos():
+        return jsonify({"error": "Download at least one album first."}), 400
+    scrape.set_offline(want)
+    STATE_FILE.unlink(missing_ok=True)     # the photo set changed
+    return jsonify({"enabled": scrape.offline_enabled()})
+
+
+def _run_download(url):
+    def progress(done, total):
+        _downloads[url] = {"state": "running", "done": done, "total": total}
+    try:
+        progress(0, 0)
+        result = scrape.download_album(url, progress)
+        _downloads[url] = {
+            "state": "done",
+            "done": result["downloaded"],
+            "total": result["total"],
+        }
+    except Exception as exc:
+        _downloads[url] = {"state": "error", "error": f"{type(exc).__name__}: {exc}"}
+
+
+@app.route("/api/offline/download", methods=["POST"])
+def api_offline_download():
+    url = (request.get_json(silent=True) or {}).get("url", "").strip()
+    if url not in scrape.read_album_urls():
+        return jsonify({"error": "unknown album"}), 400
+    job = _downloads.get(url)
+    if job and job.get("state") == "running":
+        return jsonify({"state": "already running"}), 202
+    threading.Thread(target=_run_download, args=(url,), daemon=True).start()
+    return jsonify({"state": "started"}), 202
+
+
+@app.route("/api/offline/delete", methods=["POST"])
+def api_offline_delete():
+    url = (request.get_json(silent=True) or {}).get("url", "").strip()
+    scrape.delete_album_cache(url)
+    _downloads.pop(url, None)
+    if not scrape.offline_photos():
+        scrape.set_offline(False)          # nothing left to show offline
+    STATE_FILE.unlink(missing_ok=True)
+    return jsonify({"ok": True, "enabled": scrape.offline_enabled()})
 
 
 @app.route("/api/photo")
